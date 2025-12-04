@@ -35,11 +35,10 @@
 
 #define PROGNAME	"dublin-traceroute"
 
-typedef uint16_t flow_id_t;
+typedef uint32_t flow_id_t;
 typedef std::map<flow_id_t, std::shared_ptr<Hops>> flow_map_t;
 
 void setupLogging();
 void shutDownLogging();
 
 #endif /* _COMMON_H */
-
