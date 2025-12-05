@@ -74,7 +74,7 @@ private:
 				 no_dns_;
 	std::vector<uint16_t> src_ports_,
                           dst_ports_;
-    std::string          interface_;
+  std::string          interface_;
 	std::mutex		 mutex_tracerouting,
 				 mutex_sniffed_packets;
 	Tins::IPv4Address		 my_address;
@@ -126,7 +126,7 @@ public:
 			const bool no_dns = default_no_dns,
 			const std::vector<uint16_t> &src_ports = {},
 			const std::vector<uint16_t> &dst_ports = {},
-            const std::string &interface = ""
+      const std::string &interface = ""
 			):
 				dst_(dst),
 				type_(type),
@@ -141,7 +141,7 @@ public:
 				no_dns_(no_dns),
 				src_ports_(src_ports),
 				dst_ports_(dst_ports),
-                interface_(interface)
+        interface_(interface)
 	{ init_ports(); validate_arguments(); }
 	DublinTraceroute(
 			const char *dst,
@@ -157,7 +157,7 @@ public:
 			const bool no_dns = default_no_dns,
 			const std::vector<uint16_t> &src_ports = {},
 			const std::vector<uint16_t> &dst_ports = {},
-            const std::string &interface = ""
+      const std::string &interface = ""
 		       ):
 				dst_(std::string(dst)),
 				type_(type),
@@ -172,7 +172,7 @@ public:
 				no_dns_(no_dns),
 				src_ports_(src_ports),
 				dst_ports_(dst_ports),
-                interface_(interface)
+        interface_(interface)
 	{ init_ports(); validate_arguments(); }
 	~DublinTraceroute() { std::lock_guard<std::mutex> lock(mutex_tracerouting); };
 	DublinTraceroute(const DublinTraceroute& source):
@@ -189,7 +189,7 @@ public:
 		no_dns_(source.no_dns_),
 		src_ports_(source.src_ports_),
 		dst_ports_(source.dst_ports_),
-        interface_(source.interface_)
+    interface_(source.interface_)
 	{ validate_arguments(); }
 
 	inline const std::string &dst() const { return dst_; }
@@ -205,7 +205,7 @@ public:
 	inline const bool use_srcport_for_path_generation() const { return use_srcport_for_path_generation_; }
 	inline const std::vector<uint16_t> &src_ports() const { return src_ports_; }
 	inline const std::vector<uint16_t> &dst_ports() const { return dst_ports_; }
-    inline const std::string &interface() const { return interface_; }
+  inline const std::string &interface() const { return interface_; }
 	inline const Tins::IPv4Address &target() const { return target_; }
 	void target(const Tins::IPv4Address &addr) { target_ = addr; }
 	std::shared_ptr<TracerouteResults> traceroute();
