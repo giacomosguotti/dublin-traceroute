@@ -19,6 +19,9 @@
 #include <sys/socket.h>
 #include <iostream>
 #include <iomanip>
+#include <unistd.h>
+#include <errno.h>
++#include <cstring>
 
 #include "dublintraceroute/udpv4probe.h"
 #include "dublintraceroute/common.h"
@@ -63,11 +66,54 @@ Tins::IP &UDPv4Probe::send() {
     } else {
         iface = Tins::NetworkInterface(interface_);
     }
-	Tins::PacketSender sender;
+
 	if (packet == nullptr) {
 		packet = forge();
 	}
-	sender.send(*packet, iface.name());
+
+	// Use raw socket with SO_BINDTODEVICE to force interface
+	// This ensures packets go out the specified interface regardless of routing table
+		if (!interface_.empty()) {
+			int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+			if (sock < 0) {
+				throw std::runtime_error("Failed to create raw socket: " + std::string(strerror(errno)));
+			}
+
+			// Enable IP_HDRINCL so we can send our own IP header
+			int one = 1;
+			if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0) {
+				close(sock);
+				throw std::runtime_error("Failed to set IP_HDRINCL: " + std::string(strerror(errno)));
+			}
+
+		// Bind socket to specific interface using SO_BINDTODEVICE
+		if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, interface_.c_str(), interface_.length()) < 0) {
+			close(sock);
+			throw std::runtime_error("Failed to bind to device " + interface_ + ": " + std::string(strerror(errno)));
+		}
+
+		// Serialize the packet
+		Tins::PDU::serialization_type serialized = packet->serialize();
+
+		// Setup destination address
+		struct sockaddr_in dest_addr;
+		memset(&dest_addr, 0, sizeof(dest_addr));
+		dest_addr.sin_family = AF_INET;
+		dest_addr.sin_addr.s_addr = inet_addr(packet->dst_addr().to_string().c_str());
+		// Send the packet
+		ssize_t sent = sendto(sock, serialized.data(), serialized.size(), 0,
+			(struct sockaddr*)&dest_addr, sizeof(dest_addr));
+		close(sock);
+	
+		if (sent < 0) {
+	        throw std::runtime_error("Failed to send packet: " + std::string(strerror(errno)));
+	    }
+    } else {
+            // No specific interface - use default Tins sender
+            Tins::PacketSender sender;
+            sender.send(*packet, iface.name());
+    }
+
 	return *packet;
 }
 
