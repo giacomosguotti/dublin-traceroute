@@ -280,9 +280,18 @@ main(int argc, char **argv) {
 			dst_ports,
             interface
 	);
-	
+
+	// Get source IP from the interface
+	Tins::NetworkInterface iface;
+	if (interface.empty()) {
+		iface = Tins::NetworkInterface::default_interface();
+	} else {
+		iface = Tins::NetworkInterface(interface);
+	}
+	std::string src_ip = iface.ipv4_address().to_string();
+
 	if (src_ports.empty() && dst_ports.empty()) {
-		std::cerr << "Traceroute from 0.0.0.0:" << Dublin.srcport();
+		std::cerr << "Traceroute from " << src_ip << ":" << Dublin.srcport();
 		if(use_srcport_for_path_generation == 1){
 			std::cerr << "~" << (Dublin.srcport() + npaths - 1);
 		}
