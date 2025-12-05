@@ -195,6 +195,15 @@ std::shared_ptr<TracerouteResults> DublinTraceroute::traceroute() {
 	);
 
 	std::shared_ptr<flow_map_t> flows(new flow_map_t);
+	
+	// Get the source IP address from the interface
+	Tins::NetworkInterface iface;
+	if (interface_.empty()) {
+		iface = Tins::NetworkInterface::default_interface();
+	} else {
+		iface = Tins::NetworkInterface(interface_);
+	}
+	Tins::IPv4Address local_addr = iface.ipv4_address();
 
 	// forge the packets to send
 	for (auto s_port : src_ports_) {
@@ -221,7 +230,7 @@ std::shared_ptr<TracerouteResults> DublinTraceroute::traceroute() {
 				 * checksum. The UDP checksum is used to identify the flow.
 				 */
 
-				UDPv4Probe *probe = new UDPv4Probe(target(), d_port, s_port, ttl, 0, interface_);
+				UDPv4Probe *probe = new UDPv4Probe(target(), d_port, s_port, ttl, local_addr, interface_);
 
 				Tins::IP *packet;
 				try {
