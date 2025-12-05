@@ -16,6 +16,7 @@
 #define _UDPV4PROBE_H
 
 #include <tins/tins.h>
+#include <string>
 
 
 class UDPv4Probe {
@@ -25,6 +26,7 @@ private:
 	uint16_t local_port_;
 	uint16_t remote_port_;
 	uint8_t ttl_;
+    std::string interface_;
 	Tins::IP *packet = nullptr;
 
 public:
@@ -33,22 +35,24 @@ public:
 	const uint16_t local_port() const { return local_port_; };
 	const uint16_t remote_port() const { return remote_port_; };
 	const uint8_t ttl() const { return ttl_; };
+    const std::string interface() const { return interface_; }
 
 	UDPv4Probe(
 		Tins::IPv4Address remote_addr,
 		uint16_t remote_port,
 		uint16_t local_port,
 		uint8_t ttl,
-		Tins::IPv4Address local_addr = 0):
+		Tins::IPv4Address local_addr = 0,
+        const std::string &interface = ""):
 			remote_addr_(remote_addr),
 			remote_port_(remote_port),
 			local_port_(local_port),
 			ttl_(ttl),
-			local_addr_(local_addr) { };
+			local_addr_(local_addr),
+            interface_(interface) { };
 	~UDPv4Probe();
 	Tins::IP* forge();
 	Tins::IP& send();
 };
 
 #endif /* _UDPV4PROBE_H */
-

@@ -36,6 +36,7 @@ const struct option longopts[] = {
 	{"output-file", required_argument, NULL, 'o'},
 	{"source-ports", required_argument, NULL, 1001},
 	{"dest-ports", required_argument, NULL, 1002},
+	{"interface", required_argument, NULL, 1003},
 	{NULL, 0, NULL, 0},
 };
 
@@ -57,6 +58,7 @@ Usage:
                              [--output-file=file_name]
                              [--source-ports=port_list]
                              [--dest-ports=port_list]
+                             [--interface=interface]
                              [--help]
                              [--version]
 
@@ -75,6 +77,7 @@ Options:
   -o --output-file              the output file name (default: stdout)
   --source-ports                a list of source ports to probe (e.g. 1000,1002-1005). Overrides --sport and --npaths
   --dest-ports                  a list of destination ports to probe (e.g. 80,443,8080). Overrides --dport and --npaths
+  --interface                   the network interface to use for sending packets
 
 
 See documentation at https://dublin-traceroute.net
@@ -124,6 +127,7 @@ main(int argc, char **argv) {
 	bool	use_srcport_for_path_generation = DublinTraceroute::default_use_srcport_for_path_generation;
 	bool	no_dns = DublinTraceroute::default_no_dns;
 	std::string	output_file = "";
+    std::string interface = "";
 	std::vector<uint16_t> src_ports, dst_ports;
 
 
@@ -198,6 +202,9 @@ main(int argc, char **argv) {
 					std::exit(EXIT_FAILURE);
 				}
 				break;
+            case 1003: // --interface
+                interface.assign(optarg);
+                break;
 			default:
 				std::cerr << "Invalid argument: " << iarg << ". See --help" << std::endl;
 				std::exit(EXIT_FAILURE);
@@ -270,7 +277,8 @@ main(int argc, char **argv) {
 			use_srcport_for_path_generation,
 			no_dns,
 			src_ports,
-			dst_ports
+			dst_ports,
+            interface
 	);
 	
 	if (src_ports.empty() && dst_ports.empty()) {
@@ -300,6 +308,9 @@ main(int argc, char **argv) {
 		std::cerr << "Total paths to probe: " << (Dublin.src_ports().size() * Dublin.dst_ports().size()) << std::endl;
 	}
 
+    if (!Dublin.interface().empty()) {
+        std::cerr << "Using interface: " << Dublin.interface() << std::endl;
+    }
 
 	std::shared_ptr<TracerouteResults> results;
 	try {

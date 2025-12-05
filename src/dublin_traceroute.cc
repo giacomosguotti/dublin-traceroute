@@ -221,7 +221,7 @@ std::shared_ptr<TracerouteResults> DublinTraceroute::traceroute() {
 				 * checksum. The UDP checksum is used to identify the flow.
 				 */
 
-				UDPv4Probe *probe = new UDPv4Probe(target(), d_port, s_port, ttl);
+				UDPv4Probe *probe = new UDPv4Probe(target(), d_port, s_port, ttl, 0, interface_);
 
 				Tins::IP *packet;
 				try {
