@@ -15,6 +15,8 @@
 #include <iostream>
 #include <unistd.h>
 #include <getopt.h>
+#include <sstream>
+#include <vector>
 
 #include <dublintraceroute/dublin_traceroute.h>
 
@@ -32,6 +34,8 @@ const struct option longopts[] = {
 	{"use-srcport", no_argument, NULL, 'i'},
 	{"no-dns", no_argument, NULL, 'N'},
 	{"output-file", required_argument, NULL, 'o'},
+	{"source-ports", required_argument, NULL, 1001},
+	{"dest-ports", required_argument, NULL, 1002},
 	{NULL, 0, NULL, 0},
 };
 
@@ -51,6 +55,8 @@ Usage:
                              [--use-srcport]
                              [--no-dns]
                              [--output-file=file_name]
+                             [--source-ports=port_list]
+                             [--dest-ports=port_list]
                              [--help]
                              [--version]
 
@@ -67,12 +73,40 @@ Options:
   -i --use-srcport              generate paths using source port instead of destination port
   -N --no-dns                   do not attempt to do reverse DNS lookup of the hops
   -o --output-file              the output file name (default: stdout)
+  --source-ports                a list of source ports to probe (e.g. 1000,1002-1005). Overrides --sport and --npaths
+  --dest-ports                  a list of destination ports to probe (e.g. 80,443,8080). Overrides --dport and --npaths
 
 
 See documentation at https://dublin-traceroute.net
 Please report bugs at https://github.com/insomniacslk/dublin-traceroute
 Additional features in the Python module at https://github.com/insomniacslk/python-dublin-traceroute
 )";
+}
+
+static std::vector<uint16_t> parse_ports(const std::string& arg) {
+    std::vector<uint16_t> ports;
+    std::stringstream ss(arg);
+    std::string segment;
+    while (std::getline(ss, segment, ',')) {
+        size_t hyphen = segment.find('-');
+        if (hyphen != std::string::npos) {
+            int start = std::stoi(segment.substr(0, hyphen));
+            int end = std::stoi(segment.substr(hyphen + 1));
+            if (start < 1 || start > 65535 || end < 1 || end > 65535 || start > end) {
+                throw std::invalid_argument("Invalid port range: " + segment);
+            }
+            for (int p = start; p <= end; ++p) {
+                ports.push_back(static_cast<uint16_t>(p));
+            }
+        } else {
+            int p = std::stoi(segment);
+            if (p < 1 || p > 65535) {
+                throw std::invalid_argument("Invalid port: " + segment);
+            }
+            ports.push_back(static_cast<uint16_t>(p));
+        }
+    }
+    return ports;
 }
 
 
@@ -90,6 +124,8 @@ main(int argc, char **argv) {
 	bool	use_srcport_for_path_generation = DublinTraceroute::default_use_srcport_for_path_generation;
 	bool	no_dns = DublinTraceroute::default_no_dns;
 	std::string	output_file = "";
+	std::vector<uint16_t> src_ports, dst_ports;
+
 
 	if (geteuid() == 0) {
 		std::cerr
@@ -145,6 +181,22 @@ main(int argc, char **argv) {
 				break;
 			case 'o':
 				output_file.assign(optarg);
+				break;
+			case 1001: // --source-ports
+				try {
+					src_ports = parse_ports(optarg);
+				} catch (const std::exception& e) {
+					std::cerr << "Error parsing source ports: " << e.what() << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+				break;
+			case 1002: // --dest-ports
+				try {
+					dst_ports = parse_ports(optarg);
+				} catch (const std::exception& e) {
+					std::cerr << "Error parsing dest ports: " << e.what() << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
 				break;
 			default:
 				std::cerr << "Invalid argument: " << iarg << ". See --help" << std::endl;
@@ -216,25 +268,38 @@ main(int argc, char **argv) {
 			delay,
 			broken_nat,
 			use_srcport_for_path_generation,
-			no_dns
+			no_dns,
+			src_ports,
+			dst_ports
 	);
 	
-	std::cerr << "Traceroute from 0.0.0.0:" << Dublin.srcport();
-	if(use_srcport_for_path_generation == 1){
-		std::cerr << "~" << (Dublin.srcport() + npaths - 1);
+	if (src_ports.empty() && dst_ports.empty()) {
+		std::cerr << "Traceroute from 0.0.0.0:" << Dublin.srcport();
+		if(use_srcport_for_path_generation == 1){
+			std::cerr << "~" << (Dublin.srcport() + npaths - 1);
+		}
+
+		std::cerr << " to " << Dublin.dst() << ":" << Dublin.dstport();
+		if(use_srcport_for_path_generation == 0){
+			std::cerr << "~" << (Dublin.dstport() + npaths - 1);
+		}
+		std::cerr << " (probing " << npaths << " path" << (npaths == 1 ? "" : "s")
+			<< ", min TTL is " << min_ttl
+			<< ", max TTL is " << max_ttl
+			<< ", delay is " << delay << " ms"
+			<< ")"
+			<< std::endl;
+	} else {
+		std::cerr << "Custom port lists provided." << std::endl;
+		std::cerr << "Source ports (" << Dublin.src_ports().size() << "): ";
+		for (auto p : Dublin.src_ports()) std::cerr << p << " ";
+		std::cerr << std::endl;
+		std::cerr << "Dest ports (" << Dublin.dst_ports().size() << "): ";
+		for (auto p : Dublin.dst_ports()) std::cerr << p << " ";
+		std::cerr << std::endl;
+		std::cerr << "Total paths to probe: " << (Dublin.src_ports().size() * Dublin.dst_ports().size()) << std::endl;
 	}
-	
-	std::cerr << " to " << Dublin.dst() << ":" << Dublin.dstport();
-	if(use_srcport_for_path_generation == 0){
-		std::cerr << "~" << (Dublin.dstport() + npaths - 1);
-	}
-	
-	std::cerr << " (probing " << npaths << " path" << (npaths == 1 ? "" : "s")
-		<< ", min TTL is " << min_ttl
-		<< ", max TTL is " << max_ttl
-		<< ", delay is " << delay << " ms"
-		<< ")"
-		<< std::endl;
+
 
 	std::shared_ptr<TracerouteResults> results;
 	try {
@@ -267,4 +332,3 @@ main(int argc, char **argv) {
 
 	std::exit(EXIT_SUCCESS);
 }
-
