@@ -125,7 +125,7 @@ std::shared_ptr<TracerouteResults> DublinTraceroute::traceroute() {
 		target(Tins::IPv4Address(dst()));
 	}
 
-	uint16_t num_packets = (max_ttl() - min_ttl() + 1) * npaths();
+	uint16_t num_packets = (max_ttl() - min_ttl() + 1) * src_ports_.size() * dst_ports_.size();
 	std::chrono::steady_clock::time_point deadline = \
 		std::chrono::steady_clock::now() + \
 		std::chrono::milliseconds(SNIFFER_TIMEOUT_MS) + \
@@ -196,63 +196,57 @@ std::shared_ptr<TracerouteResults> DublinTraceroute::traceroute() {
 
 	std::shared_ptr<flow_map_t> flows(new flow_map_t);
 
-	uint16_t iterated_port = dstport();
-	if(use_srcport_for_path_generation()) iterated_port = srcport();
-	uint16_t end_port = iterated_port + npaths();
-
 	// forge the packets to send
-	for (iterated_port; iterated_port < end_port; iterated_port++) {
-		/* Forge the packets to send and append them to the packets
-		 * vector.
-		 * To force a packet through the same network flow, it has to
-		 * maintain several constant fields that will be used for the
-		 * ECMP hashing. These fields are, in the case of IP+UDP:
-		 *
-		 *   IPv4.tos
-		 *   IPv4.proto
-		 *   IPv4.src
-		 *   IPv4.dst
-		 *   UDP.sport
-		 *   UDP.dport
-		 */
-		Hops hops;
-		for (uint8_t ttl = min_ttl_; ttl <= max_ttl_; ttl++) {
-			/*
-		 	 * Adjust the payload for each flow to obtain the same UDP
-		 	 * checksum. The UDP checksum is used to identify the flow.
-		 	 */
-			
-			UDPv4Probe *probe = NULL;
-			if(use_srcport_for_path_generation()){
-				probe = new UDPv4Probe(target(), dstport(), iterated_port, ttl);
-			}
-			else{
-				probe = new UDPv4Probe(target(), iterated_port, srcport(), ttl);
-				//UDPv4Probe probe(target(), dport, srcport(), ttl);	
-			}
-			Tins::IP *packet;
-			try {
-				packet = &probe->send();
-			} catch (std::runtime_error &e) {
-				std::stringstream ss;
-				ss << "Cannot send packet: " << e.what();
-				throw DublinTracerouteException(ss.str());
-			}
-			auto now = Tins::Timestamp::current_time();
+	for (auto s_port : src_ports_) {
+		for (auto d_port : dst_ports_) {
+			/* Forge the packets to send and append them to the packets
+			 * vector.
+			 * To force a packet through the same network flow, it has to
+			 * maintain several constant fields that will be used for the
+			 * ECMP hashing. These fields are, in the case of IP+UDP:
+			 *
+			 *   IPv4.tos
+			 *   IPv4.proto
+			 *   IPv4.src
+			 *   IPv4.dst
+			 *   UDP.sport
+			 *   UDP.dport
+			 */
+			Hops hops;
+			flow_id_t flow_id = ((uint32_t)s_port << 16) | d_port;
 
-			try {
-				Hop hop;
-				hop.sent(*packet);
-				hop.sent_timestamp(now);
-				hops.push_back(hop);
-			} catch (std::runtime_error e) {
-				std::stringstream ss;
-				ss << "Cannot find flow: " << iterated_port << ": " << e.what();
-				throw DublinTracerouteException(ss.str());
+			for (uint8_t ttl = min_ttl_; ttl <= max_ttl_; ttl++) {
+				/*
+				 * Adjust the payload for each flow to obtain the same UDP
+				 * checksum. The UDP checksum is used to identify the flow.
+				 */
+
+				UDPv4Probe *probe = new UDPv4Probe(target(), d_port, s_port, ttl, 0, interface_);
+
+				Tins::IP *packet;
+				try {
+					packet = &probe->send();
+				} catch (std::runtime_error &e) {
+					std::stringstream ss;
+					ss << "Cannot send packet: " << e.what();
+					throw DublinTracerouteException(ss.str());
+				}
+				auto now = Tins::Timestamp::current_time();
+
+				try {
+					Hop hop;
+					hop.sent(*packet);
+					hop.sent_timestamp(now);
+					hops.push_back(hop);
+				} catch (std::runtime_error e) {
+					std::stringstream ss;
+					ss << "Cannot find flow: " << flow_id << ": " << e.what();
+					throw DublinTracerouteException(ss.str());
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(delay()));
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(delay()));
+			flows->insert(std::make_pair(flow_id, std::make_shared<Hops>(hops)));
 		}
-		flows->insert(std::make_pair(iterated_port, std::make_shared<Hops>(hops)));
 	}
 
 	listener_thread.join();
@@ -293,5 +287,3 @@ void DublinTraceroute::match_hostnames(TracerouteResults &results, std::shared_p
 		}
 	}
 }
-
-

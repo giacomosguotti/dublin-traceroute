@@ -57,7 +57,12 @@ Tins::IP* UDPv4Probe::forge() {
 }
 
 Tins::IP &UDPv4Probe::send() {
-	Tins::NetworkInterface iface = Tins::NetworkInterface::default_interface();
+    Tins::NetworkInterface iface;
+    if (interface_.empty()) {
+	    iface = Tins::NetworkInterface::default_interface();
+    } else {
+        iface = Tins::NetworkInterface(interface_);
+    }
 	Tins::PacketSender sender;
 	if (packet == nullptr) {
 		packet = forge();
@@ -70,4 +75,3 @@ UDPv4Probe::~UDPv4Probe() {
 	if (packet != nullptr)
 		delete packet;
 }
-

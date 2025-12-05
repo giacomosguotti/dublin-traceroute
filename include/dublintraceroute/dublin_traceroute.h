@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 #include <thread>
 #include <mutex>
+#include <vector>
 
 #include "common.h"
 #include "exceptions.h"
@@ -71,11 +72,34 @@ private:
 	const bool		 broken_nat_,
 				 use_srcport_for_path_generation_,
 				 no_dns_;
+	std::vector<uint16_t> src_ports_,
+                          dst_ports_;
+    std::string          interface_;
 	std::mutex		 mutex_tracerouting,
 				 mutex_sniffed_packets;
 	Tins::IPv4Address		 my_address;
 	std::vector<std::shared_ptr<Tins::Packet>>	 sniffed_packets;
 	const void		 validate_arguments();
+
+    // Helper to populate ports if empty
+    void init_ports() {
+        if (src_ports_.empty() && dst_ports_.empty()) {
+            if (use_srcport_for_path_generation_) {
+                for (uint16_t p = srcport_; p < srcport_ + npaths_; ++p) {
+                    src_ports_.push_back(p);
+                }
+                dst_ports_.push_back(dstport_);
+            } else {
+                src_ports_.push_back(srcport_);
+                for (uint16_t p = dstport_; p < dstport_ + npaths_; ++p) {
+                    dst_ports_.push_back(p);
+                }
+            }
+        } else {
+            if (src_ports_.empty()) src_ports_.push_back(srcport_);
+            if (dst_ports_.empty()) dst_ports_.push_back(dstport_);
+        }
+    }
 
 public:
 	static const probe_type  default_type = probe_type::UDPv4;
@@ -99,7 +123,10 @@ public:
 			const uint16_t delay = default_delay,
 			const bool broken_nat = default_broken_nat,
 			const bool use_srcport_for_path_generation = default_use_srcport_for_path_generation,
-			const bool no_dns = default_no_dns
+			const bool no_dns = default_no_dns,
+			const std::vector<uint16_t> &src_ports = {},
+			const std::vector<uint16_t> &dst_ports = {},
+            const std::string &interface = ""
 			):
 				dst_(dst),
 				type_(type),
@@ -111,8 +138,11 @@ public:
 				delay_(delay),
 				broken_nat_(broken_nat),
 				use_srcport_for_path_generation_(use_srcport_for_path_generation),
-				no_dns_(no_dns)
-	{ validate_arguments(); }
+				no_dns_(no_dns),
+				src_ports_(src_ports),
+				dst_ports_(dst_ports),
+                interface_(interface)
+	{ init_ports(); validate_arguments(); }
 	DublinTraceroute(
 			const char *dst,
 			const probe_type type = default_type,
@@ -124,7 +154,10 @@ public:
 			const uint16_t delay = default_delay,
 			const bool broken_nat = default_broken_nat,
 			const bool use_srcport_for_path_generation = default_use_srcport_for_path_generation,
-			const bool no_dns = default_no_dns
+			const bool no_dns = default_no_dns,
+			const std::vector<uint16_t> &src_ports = {},
+			const std::vector<uint16_t> &dst_ports = {},
+            const std::string &interface = ""
 		       ):
 				dst_(std::string(dst)),
 				type_(type),
@@ -136,8 +169,11 @@ public:
 				delay_(delay),
 				broken_nat_(broken_nat),
 				use_srcport_for_path_generation_(use_srcport_for_path_generation),
-				no_dns_(no_dns)
-	{ validate_arguments(); }
+				no_dns_(no_dns),
+				src_ports_(src_ports),
+				dst_ports_(dst_ports),
+                interface_(interface)
+	{ init_ports(); validate_arguments(); }
 	~DublinTraceroute() { std::lock_guard<std::mutex> lock(mutex_tracerouting); };
 	DublinTraceroute(const DublinTraceroute& source):
 		dst_(source.dst_),
@@ -150,7 +186,10 @@ public:
 		delay_(source.delay_),
 		broken_nat_(source.broken_nat_),
 		use_srcport_for_path_generation_(source.use_srcport_for_path_generation_),
-		no_dns_(source.no_dns_)
+		no_dns_(source.no_dns_),
+		src_ports_(source.src_ports_),
+		dst_ports_(source.dst_ports_),
+        interface_(source.interface_)
 	{ validate_arguments(); }
 
 	inline const std::string &dst() const { return dst_; }
@@ -164,6 +203,9 @@ public:
 	inline const bool broken_nat() const { return broken_nat_; }
 	inline const bool no_dns() const { return no_dns_; }
 	inline const bool use_srcport_for_path_generation() const { return use_srcport_for_path_generation_; }
+	inline const std::vector<uint16_t> &src_ports() const { return src_ports_; }
+	inline const std::vector<uint16_t> &dst_ports() const { return dst_ports_; }
+    inline const std::string &interface() const { return interface_; }
 	inline const Tins::IPv4Address &target() const { return target_; }
 	void target(const Tins::IPv4Address &addr) { target_ = addr; }
 	std::shared_ptr<TracerouteResults> traceroute();
@@ -175,4 +217,3 @@ private:
 };
 
 #endif /* _Dublin_TRACEROUTE_H */
-

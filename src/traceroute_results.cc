@@ -65,13 +65,9 @@ std::shared_ptr<Tins::IP> TracerouteResults::match_packet(const Tins::Packet &pa
 		return nullptr;
 	}
 
-	// Try to match the received packet against the sent packets. The flow
-	// is identified by the UDP destination port in the case of use_srcport_for_path_generation is set to false
-	// if use_srcport_for_path_generation is set to true the source port is used to identify the flow
-	auto flow_id = inner_udp.dport();
-	if(use_srcport_for_path_generation_){
-		flow_id = inner_udp.sport();
-	}
+	// Try to match the received packet against the sent packets.
+	// The flow is identified by the combination of source and destination ports.
+	flow_id_t flow_id = ((uint32_t)inner_udp.sport() << 16) | inner_udp.dport();
 
 	std::shared_ptr<Hops> hops;
 	try {
@@ -126,7 +122,9 @@ void TracerouteResults::show(std::ostream &stream) {
 		unsigned int hopnum = min_ttl;
 		unsigned int index = 0;
 		uint16_t prev_nat_id = 0;
-		stream << "== Flow ID " << iter.first << " ==" << std::endl;
+		uint16_t src_port = (iter.first >> 16) & 0xFFFF;
+		uint16_t dst_port = iter.first & 0xFFFF;
+		stream << "== Flow ID " << iter.first << " (Src: " << src_port << ", Dst: " << dst_port << ") ==" << std::endl;
 		for (auto &hop: *iter.second) {
 			stream << hopnum << "    ";
 			if (!hop) {
@@ -252,6 +250,10 @@ std::string TracerouteResults::to_json() {
 				break;
 		}
 		root["flows"][flow_id] = hops;
+		// Add flow metadata (optional but helpful since key is now composite)
+        // We use a separate object to avoid breaking the "flows" schema (which expects an array of hops)
+		root["flow_metadata"][flow_id]["src_port"] = (iter.first >> 16) & 0xFFFF;
+		root["flow_metadata"][flow_id]["dst_port"] = iter.first & 0xFFFF;
 	}
 
 	json << root;
